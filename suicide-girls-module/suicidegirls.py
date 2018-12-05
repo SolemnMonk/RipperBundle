@@ -301,7 +301,7 @@ class SuicideGirls:
 			args[0].append("\tImage " + args[2] + " failed; URL: " + args[3])
 		print(args[4].title() + "/" + args[5].title() + " #" + args[2] + " complete")
 		
-	def start_processes(async_result):
+	def start_processes(self, async_result):
 		async_result.get()
 		
 def print_warning():

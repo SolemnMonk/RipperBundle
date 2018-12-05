@@ -1,5 +1,5 @@
 import os, os.path, importlib, argparse, sys, json
-#operations to add: install module, resolve conflicts, add credentials
+#operations to add: install module, install dependency, list aliases, resolve conflicts, add credentials
 
 credentials = {}
 
@@ -91,21 +91,28 @@ def print_alias_conflicts(conflicts):
 		for alias in conflicts.keys():
 			print(f"Alias '{alias}' provided by {', '.join(conflicts[alias])}")
 
-def preliminary_arg_parse(aliases):
-	preliminary_parser = argparse.ArgumentParser()
+def build_base_parser():
+	parser = argparse.ArgumentParser()
 	
-	preliminary_parser.add_argument(choices=aliases.keys(), dest="target_alias", nargs=1, metavar="alias")
-	subparsers = preliminary_parser.add_subparsers()
-	
-	args = preliminary_parser.parse_args(sys.argv[1:2])
-	
-	target_alias = args[0].target_alias[0]
-	return aliases[target_alias], args[1]
+	parser.add_argument("-l", "--list", help="List the aliases and friendly names for all installed modules", action="store_true", dest="list")
+	parser.add_argument("--install-module", help="Install a new module; accepts a path to a directory", dest="install_module")
+	parser.add_argument("--install-dependency", help="Install a dependency for a module; accepts a path to a directory or a single file", dest="install_dependency")
+	parser.add_argument("--resolve-conflict", help="Resolve all alias conflicts; enters an interactive mode", action="store_true", dest="resolve_conflict")
+	parser.add_argument("--add-credentials", help="Add credentials for one or more plugins; enters an interactive mode", action="store_true", dest="credentials")
 
-def full_arg_parse(target_module_dir, remaining_args):
-	manifest = get_module_manifest(target_module_dir)
-	return manifest.parser.parse_args(remaining_args)
+	return parser
+
+def build_parsers(aliases):
+	parser = build_base_parser()
+	subparsers = parser.add_subparsers(dest="target_alias", metavar="pluginAlias")
+
+	for alias in aliases:
+		manifest = get_module_manifest(aliases[alias])
+		sub_parser = subparsers.add_parser(alias)
+		manifest.get_parser(sub_parser)
 	
+	return parser
+
 def dispatch(target_module_dir, args):
 	print("args: " + str(args))
 	manifest = get_module_manifest(target_module_dir)
@@ -125,6 +132,8 @@ def load_credentials():
 def main():
 	cd()
 
+	load_credentials()
+
 	potential_modules = get_potential_modules()
 	module_dirs = get_module_dirs(potential_modules)
 
@@ -135,13 +144,11 @@ def main():
 		return
 	print("No plugin alias conflicts detected.")
 
-	# Okay, let's test and make sure that the manifest is creating the right parser
+	parsers = build_parsers(aliases)
 
-	return
-	target_module_dir, remaining_args = preliminary_arg_parse(aliases)
+	args = parsers.parse_args()
 
-	args = full_arg_parse(target_module_dir, remaining_args)
-	dispatch(target_module_dir, args)
+	dispatch(aliases[args.target_alias], args)
 	
 if __name__ == "__main__":
 	main()
