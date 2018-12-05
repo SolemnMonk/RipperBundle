@@ -105,8 +105,8 @@ venv.bak/
 
 # VS Code files
 *.code-workspace
+.vscode/
 
 # Bespoke exclusions
 3rd-party-tools/
-.vscode/
 credentials.json
