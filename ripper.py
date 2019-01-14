@@ -86,7 +86,7 @@ def get_aliases(plugin_dirs):
 
 def print_alias_conflicts(conflicts):
 	if len(conflicts) > 0:
-		print("Alias conflicts discovered, please resolve them to continue.")
+		print("Alias conflicts discovered")
 		for alias in conflicts.keys():
 			print(f"Alias '{alias}' provided by {', '.join(conflicts[alias])}")
 
@@ -114,6 +114,9 @@ def build_parsers(aliases):
 
 def dispatch(target_plugin_dir, args):
 	print("args: " + str(args))
+	print("Dispatching...")
+	print()
+
 	manifest = get_plugin_manifest(target_plugin_dir)
 	credential_key = manifest.credential_key
 	
@@ -133,12 +136,11 @@ def load_credentials():
 
 def should_dispatch_to_plugin(args):
 	dispatch = True
-	
 	dispatch = dispatch and not args.list
 	dispatch = dispatch and not args.add_credentials
 	dispatch = dispatch and not args.resolve_conflict
-	dispatch = dispatch and not args.install_plugin is None
-	dispatch = dispatch and not args.install_dependency is None
+	dispatch = dispatch and args.install_plugin is None
+	dispatch = dispatch and args.install_dependency is None
 
 	return dispatch
 
@@ -154,12 +156,12 @@ def list_aliases(aliases):
 	for alias in sorted_aliases:
 		print("\t" + alias + " : " + ", ".join(sorted_aliases[alias]))
 
-def add_credentials(aliases):
+def get_credential_selection(plugin_dirs):
+	selection = -1
+	
 	print()
 	print("Which plugin would you like to add credentials for?")
-	
-	selection = -1
-	plugin_dirs = sorted(list(set(aliases.values())))
+
 	while True:
 		try:
 			i = 1
@@ -167,6 +169,7 @@ def add_credentials(aliases):
 			print("0: <quit application>")
 			for plugin_dir in plugin_dirs:
 				print(str(i) + ": " + plugin_dir)
+				i += 1
 			
 			selection = input("> ").strip()
 			selection = int(selection)
@@ -175,14 +178,10 @@ def add_credentials(aliases):
 			break
 		except:
 			print("Invalid selection, please choose a number between 1 and " + str(len(plugin_dirs)))
-
-	if selection is 0:
-		print("Exiting...")
-		return
 	
-	manifest = get_plugin_manifest(plugin_dirs[selection - 1])
-	credential_key = manifest.credential_key
+	return selection
 
+def get_new_credential(manifest, plugin_dirs, selection):
 	print("Enter the username to add:")
 	username = input("> ")
 	print("Enter the password:")
@@ -202,9 +201,10 @@ def add_credentials(aliases):
 	credential = {"username" : username, "password" : password}
 	for field in additional_fields:
 		credential[field] = additional_fields[field]
+	
+	return credential
 
-	load_credentials()
-
+def update_and_save_credentials(credential_key, credential):
 	global credentials
 	credentials[credential_key] = credential
 
@@ -221,9 +221,22 @@ def add_credentials(aliases):
 		else:
 			print("Failed to add credential; exiting...")
 
+def add_credentials(aliases):
+	plugin_dirs = sorted(list(set(aliases.values())))
+	selection = get_credential_selection(plugin_dirs)
 
-def resolve_conflict(aliases):
-	pass
+	if selection is 0:
+		print("Exiting...")
+		return
+	
+	manifest = get_plugin_manifest(plugin_dirs[selection - 1])
+
+	credential_key = manifest.credential_key
+	credential = get_new_credential(manifest, plugin_dirs, selection)
+
+	load_credentials()
+
+	update_and_save_credentials(credential_key, credential)
 
 def install_plugin(args):
 	pass
@@ -231,13 +244,11 @@ def install_plugin(args):
 def install_dependency(args):
 	pass
 
-def handle_core_arguments(args, aliases):
+def handle_core_arguments(args, aliases, conflicts):
 	if args.list:
 		list_aliases(aliases)
 	elif args.add_credentials:
 		add_credentials(aliases)
-	elif args.resolve_conflict:
-		resolve_conflict(aliases)
 	elif args.install_plugin is not None:
 		install_plugin(args)
 	elif args.install_dependency is not None:
@@ -253,19 +264,22 @@ def main():
 
 	aliases, conflicts = get_aliases(plugin_dirs)
 
-	if len(conflicts) > 0:
-		print_alias_conflicts(conflicts)
-		return
-	print("No plugin alias conflicts detected.")
-
 	parsers = build_parsers(aliases)
 
 	args = parsers.parse_args()
+	
+	if len(conflicts) > 0:
+		print_alias_conflicts(conflicts)
+		if not args.resolve_conflict:
+			print("Plugin alias conflicts detected, please resolve them with --resolve-confict")
+			return
+	else:
+		print("No plugin alias conflicts detected.")
 
 	if (should_dispatch_to_plugin(args)):
 		dispatch(aliases[args.target_alias], args)
 	else:
-		handle_core_arguments(args, aliases)
+		handle_core_arguments(args, aliases, conflicts)
 
 if __name__ == "__main__":
 	main()

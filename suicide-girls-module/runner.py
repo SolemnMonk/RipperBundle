@@ -1,10 +1,11 @@
 import time, subprocess, os.path, re, multiprocessing, threading
 
 from . import manifest
+from enum import Enum, auto
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 class Runner:
 	@classmethod
@@ -42,20 +43,28 @@ class Runner:
 		un = credentials["username"]
 		pw = credentials["password"]
 
-		processed_args = (args.dir, args.processes, urls, type, time_period_translations[args.time_period], un, pw)
+		# 
+		processed_args = (args.dir, args.processes, urls, type, time_period_translations[args.time_period], un, pw, args.interactive)
 
-		sg = SuicideGirls(processed_args[5], processed_args[6], processed_args[0], processed_args[1], processed_args[2], processed_args[3], processed_args[4])
+		sg = SuicideGirls(processed_args[5], processed_args[6], processed_args[7], processed_args[0], processed_args[1], processed_args[2], processed_args[3], processed_args[4])
 		sg.startup()
 		start = time.time()
 		sg.rip()
 		sg.shutdown()
-		end = time.time()
-		duration = end - start
-		seconds = duration % 60
-		minutes = duration // 60
-		hours = minutes // 60
-		minutes = minutes % 60
-		print("Time taken (hh:mm:ss): " + str(int(hours)).zfill(2) + ":" + str(int(minutes)).zfill(2) + ":" + str(int(seconds)).zfill(2))
+
+		if(args.display_stats):
+			end = time.time()
+			duration = end - start
+			seconds = duration % 60
+			minutes = duration // 60
+			hours = minutes // 60
+			minutes = minutes % 60
+			print("Time taken (hh:mm:ss): " + str(int(hours)).zfill(2) + ":" + str(int(minutes)).zfill(2) + ":" + str(int(seconds)).zfill(2))
+
+class MediaType(Enum):
+	IMAGE_ZIPS = auto()
+	SINGLE_VIDEO = auto()
+	VIDEO_CLIPS = auto()
 
 class SuicideGirls:
 	driver = None
@@ -63,30 +72,60 @@ class SuicideGirls:
 	argument_lists = []
 	stop_dispatching = False
 	
-	def __init__(self, username, password, dir, process_limit, urls, type, time_period):
+	def __init__(self, username, password, interactive, dir, process_limit, urls, type, time_period):
 		SuicideGirls.dispatcher_thread = threading.Thread(target=self.__dispatch)
 		
+		self.root_url = "https://www.suicidegirls.com/"
 		self.username = username
 		self.password = password
-		self.root_url = "https://www.suicidegirls.com/"
-		self.dir = dir
 		self.exec_dir = "./"
-		self.process_limit = process_limit
-		self.urls = []
-		self.__type = type
-		self.process_limit = process_limit
-		self.time_period = time_period
 		self.girls_completed = 0
 		self.sets_completed = 0
 		
-		if type in ["girl", "hopeful"]:
-			for url in urls:
-				self.urls.append(self.__build_url(url))
+		if interactive:
+			self.build_interactive()
 		else:
-			self.urls = urls
+			self.dir = dir
+			self.process_limit = process_limit
+			self.__type = type
+			self.time_period = time_period
+		
+			if type in ["girl", "hopeful"]:
+				self.urls = []
+				for url in urls:
+					self.urls.append(self.__build_url(url))
+			else:
+				self.urls = urls
 			
 		SuicideGirls.dispatcher_thread.start()
 		
+	def build_interactive(self):
+		print("Welcome to the Suicide Girls Plugin's interactive mode!")
+		print("You'll be asked a few questions before the plugin starts.")
+
+		print("(1/4) Where are we saving these photosets to?")
+		print("Default: " + os.path.abspath(os.path.dirname(self.exec_dir)))
+		self.dir = input("> ")
+		if self.dir is None or self.dir == "":
+			self.dir = os.path.abspath(os.path.dirname(self.exec_dir))
+		
+		print("(2/4) How many ripping processes should be running?")
+		print("Default: 8")
+		self.process_limit = input("> ")
+		try:
+			self.process_limit = int(self.process_limit)
+		except ValueError:
+			self.process_limit = 8
+
+		choices = ["girl", "hopeful", "set", "all_girls", "all_hopefuls", "all_sets_of_the_day", "all"]
+
+		print("(3/4) What type of rip is this?")
+		print("Choices: " + ", ".join(choices))
+		print("Default: sets")
+		self.__type = input("> ")
+		if self.__type not in choices:
+			self.__type = "sets"
+
 	def __dispatch(self):
 		print("Beginning dispatcher thread...")
 		while not SuicideGirls.stop_dispatching or len(SuicideGirls.argument_lists) != 0:
@@ -343,15 +382,12 @@ class SuicideGirls:
 			return "https://www.suicidegirls.com/members/" + name
 	
 	def download_image(self, args):
-		print(args[1])
+		#print(args[1])
 		process = subprocess.run(args[1])
 		if process.returncode != 0:
 			args[0].append("\tImage " + args[2] + " failed; URL: " + args[3])
 		print(args[4].title() + "/" + args[5].title() + " #" + args[2] + " complete")
-		
-	def start_processes(self, async_result):
-		async_result.get()
-		
+				
 def print_warning():
 	print("This file is meant to be imported by other Python files, not run directly. Exiting now.")
 
